@@ -17,9 +17,6 @@ editors use to talk to coding agents, so any ACP agent works: Claude Code,
 Gemini CLI, Codex and more. The agent runs on your computer; the handheld is
 the screen and mic.
 
-Grimoire is written in Nim and also runs on Linux desktops, with the two
-screens shown in separate X11 windows.
-
 ## Build
 
 On an x86-64 Linux computer, you'll need:
@@ -36,29 +33,20 @@ nimby create
 git clone https://github.com/monofuel/grimoire
 cd grimoire
 nimby sync nimby.lock
-make desktop
 ```
-
-The handheld build needs libraries copied from your device; see below before
-running `make rg-ds-plus`.
 
 ## Configure
 
-Grimoire reads `~/.config/grimoire/config.json` on the machine running its
-interface: your computer for desktop use, or the handheld for handheld use.
-The project paths always refer to folders on the computer running the agent.
-
-For desktop use, create the configuration file with your project path:
+Installation creates `~/.config/grimoire/config.json` on the handheld.
+Edit its `projects` to point to folders on the computer running the agent,
+and keep the `agent` entry that connects to the host runner:
 
 ```json
 {
+  "agent": ["/usr/local/bin/grimoire-host-relay"],
   "projects": [{"name": "my-project", "cwd": "/absolute/path/to/my-project"}]
 }
 ```
-
-For handheld use, installation creates this file on the device. Edit its
-`projects` there and keep the existing `agent` entry, which connects to the
-host runner.
 
 ### Agent
 
@@ -70,8 +58,7 @@ make host-setup
 ```
 
 For another agent, set `GRIMOIRE_AGENT` in the computer's untracked `local.mk`
-to its ACP command when using the handheld. For desktop use, set `agent` in
-the JSON configuration to an array containing the command and its arguments.
+to its ACP command.
 `host-setup` is only needed for the default Claude Code adapter.
 
 ### Speech
@@ -80,8 +67,8 @@ Speech recognition and playback use
 [openai_leap](https://github.com/monofuel/openai_leap). OpenAI is the default,
 using `gpt-transcribe` for recognition and `gpt-realtime-2.1-mini` for spoken
 replies. Set `OPENAI_API_KEY` in Grimoire's environment, or add a `speech`
-object with an `apiKey` to its configuration. For handheld use, configure the
-key on the device; the host runner does not forward your computer's environment.
+object with an `apiKey` to its configuration on the device. The host runner
+does not forward your computer's environment.
 
 To use a local OpenAI-compatible server such as LFM3-Audio, add this `speech`
 object to the same configuration instead:
@@ -97,12 +84,7 @@ object to the same configuration instead:
 }
 ```
 
-The machine running Grimoire must be able to reach that speech server.
-
-## Run on a desktop
-
-With your agent and speech configured, run `make run`. It opens two X11
-windows and starts the agent on the same computer.
+The handheld must be able to reach that speech server.
 
 ## Run on the RG DS Plus
 
@@ -152,6 +134,13 @@ Grimoire from the handheld's Apps menu. Installation does not add that menu entr
 Press Start for the menu, then Quit to return to the launcher.
 The session script stops mono-retro while Grimoire uses the displays and
 restarts it when Grimoire exits.
+
+## Desktop debugging
+
+For development, `make run` builds Grimoire and opens its two screens as X11
+windows on your Linux computer. Use a local `~/.config/grimoire/config.json`
+with your project and speech settings. Omit `agent` to use the default host
+adapter, or set it to an array containing your ACP command and its arguments.
 
 ## License
 
