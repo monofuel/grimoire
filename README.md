@@ -22,7 +22,7 @@ the screen and mic.
 On an x86-64 Linux computer, you'll need:
 
 - Git, Make and Nix with flakes enabled. `make` uses `flake.nix` to supply Nim,
-  native libraries and the ARM64 cross compiler.
+  the compiler and native libraries.
 - Nimby 0.2.3 or newer to fetch the dependencies pinned in `nimby.lock`.
 - An ACP agent installed and authenticated on that computer. The default
   Claude Code adapter also needs Node.js and npm.
@@ -34,6 +34,9 @@ git clone https://github.com/monofuel/grimoire
 cd grimoire
 nimby sync nimby.lock
 ```
+
+The current handheld build needs copied device libraries; see the paths in
+the [cross-build configuration](config.nims).
 
 ## Configure
 
@@ -88,24 +91,10 @@ The handheld must be able to reach that speech server.
 
 ## Run on the RG DS Plus
 
-The supplied scripts target the RG DS Plus running Linux with the
-[mono-retro](https://github.com/monofuel/mono-retro) launcher and its OpenRC
-service; our device runs Gentoo. Your computer must already have key-based
-SSH access to the handheld, with its host key verified, and the handheld
-user needs passwordless `sudo`.
-
-Before cross-building, copy the handheld's ARM64 libraries into a directory
-on your computer: libdrm, libevdev, libudev, OpenAL and glibc, including
-`ld-linux-aarch64.so.1`. Preserve the library symlinks and their targets.
-Point the build at that directory in an untracked `local.mk`:
-
-```make
-export GRIMOIRE_TARGET_LIBS = /absolute/path/to/arm64-libs
-RG_DS_PLUS_USER = your-handheld-user
-```
-
-The default library directory is `../mono-retro/build/arm64-libs` if you
-already have it populated.
+The included session scripts use the
+[mono-retro](https://github.com/monofuel/mono-retro) launcher and OpenRC.
+Installation requires key-based SSH access from your computer to the handheld
+and passwordless `sudo` on the device.
 
 Find the handheld's current address, then install from your computer:
 
