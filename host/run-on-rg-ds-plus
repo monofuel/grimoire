@@ -9,7 +9,9 @@ pipes=$(mktemp -d /tmp/grimoire-acp.XXXXXX)
 mkfifo -m 600 "$pipes/to-agent" "$pipes/from-agent"
 # The adapter keeps running after stdin closes, so it gets its own process
 # group that is stopped when the handheld session ends.
-setsid "$here/grimoire-acp" <"$pipes/to-agent" >"$pipes/from-agent" &
+# GRIMOIRE_AGENT is the shell command of any ACP agent; Claude Code by default.
+setsid sh -c "exec ${GRIMOIRE_AGENT:-\"$here/grimoire-acp\"}" \
+  <"$pipes/to-agent" >"$pipes/from-agent" &
 agent=$!
 cleanup() {
   kill -TERM -- "-$agent" 2>/dev/null || true

@@ -10,6 +10,8 @@ RG_DS_PLUS_USER ?= $(USER)
 RG_DS_PLUS_SSH_OPTS ?= -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=5
 export GRIMOIRE_DEVICE_USER = $(RG_DS_PLUS_USER)
 export GRIMOIRE_SSH_OPTS = $(RG_DS_PLUS_SSH_OPTS)
+# The ACP agent the handheld uses, run on this computer; Claude Code if unset.
+export GRIMOIRE_AGENT
 require-address = $(if $(RG_DS_PLUS),,$(error Set RG_DS_PLUS to the handheld's current address))
 SSH_DS = ssh $(RG_DS_PLUS_SSH_OPTS)
 SCP_DS = scp $(RG_DS_PLUS_SSH_OPTS)
