@@ -20,3 +20,4 @@ ACPort 1.3.0 https://github.com/monofuel/ACPort ddc2c07192ed1e5f649bf18de17d0084
 jsony 1.1.6 https://github.com/treeform/jsony ce1ea84458c721947bd8e86ec065eeefab2656f1
 mono-retro 0.1.0 https://github.com/monofuel/mono-retro 31e6382b9c433949560914025ccd056e2ac55517
 paddy 0.1.0 https://github.com/treeform/paddy 9f09c7bceb5d2326cf4849fb384793de679ea363
+openai_leap 16.0.0 https://github.com/monofuel/openai_leap 18b695ce4150f666e279f023013077d6abc2165a

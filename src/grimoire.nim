@@ -10,7 +10,7 @@ type
     configPath: string
     display: string
     fontSize: float32
-    checkPrompt, checkWav, saveWav, snapshotDir, profilePath, inputWav: string
+    checkPrompt, checkWav, checkTts, saveWav, snapshotDir, profilePath, inputWav: string
     agentStdio: bool
   Screens = object
     top, bottom: Window
@@ -27,6 +27,8 @@ grimoire [options]
   --check-agent:TEXT   Without a display, send TEXT to the agent and print the reply.
                        Permission requests are rejected automatically.
   --check-stt:WAV      Without a display, transcribe WAV and print the text.
+  --check-tts:TEXT     Without a display, synthesize TEXT into speech-check.wav
+                       (written to a file, never played).
   --save-wav:PATH      Also write each recorded turn to PATH for diagnostics.
   --input-wav:PATH     Use this 16-bit mono WAV as the microphone each time it
                        listens, played in real time and followed by quiet, and
@@ -63,6 +65,7 @@ proc parseOptions(): Options =
       of "font-size": result.fontSize = parseFloat(value)
       of "check-agent": result.checkPrompt = value
       of "check-stt": result.checkWav = value
+      of "check-tts": result.checkTts = value
       of "save-wav": result.saveWav = value
       of "input-wav": result.inputWav = value
       of "snapshot": result.snapshotDir = value
@@ -187,7 +190,7 @@ proc finishListening(app: App, saveWav: string) =
     app.handsFree = false
   else:
     if saveWav.len > 0: app.recorder.saveWav(saveWav)
-    app.recorder.submit(app.config.sttUrl, app.config.sttModel)
+    app.recorder.submit(app.config.speech)
     app.transcribing = true
 
 proc perform(app: App, action: Action, optionId: string, screens: Screens, saveWav: string) =
@@ -356,7 +359,15 @@ proc main() =
     adoptStdioAgent()
     config.agent = StdioRelay
   if options.checkWav.len > 0:
-    echo transcribe(config.sttUrl, config.sttModel, readFile(options.checkWav))
+    echo transcribe(config.speech, readFile(options.checkWav))
+    return
+  if options.checkTts.len > 0:
+    let (pcm, rate, channels) = synthesize(config.speech, options.checkTts)
+    if channels != 1: quit("Expected mono speech, got " & $channels & " channels", 1)
+    var samples = newSeq[int16](pcm.len div 2)
+    if samples.len > 0: copyMem(addr samples[0], unsafeAddr pcm[0], samples.len * 2)
+    writeFile("speech-check.wav", wavBytes(samples, rate))
+    echo "wrote speech-check.wav: ", samples.len / rate, " s at ", rate, " Hz"
     return
   if options.checkPrompt.len > 0:
     checkAgent(config, options.checkPrompt)
@@ -510,8 +521,7 @@ proc main() =
           app.info("Turn ended: " & stopReason)
           if stopReason != "cancelled" and app.speakReplies and
               app.replyText.strip().len > 0:
-            app.speechPending = speak(app.replyText, app.config.ttsUrl, app.config.sttModel,
-              app.config.ttsVoice)
+            app.speechPending = speak(app.replyText, app.config.speech)
         app.replyText = ""
         if stopReason in ["cancelled", "error"]: app.handsFree = false
         app.clearPermission()

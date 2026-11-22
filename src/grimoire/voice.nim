@@ -1,6 +1,7 @@
 import
-  std/[atomics, base64, json, math, os, strformat, strutils, times],
-  curly, slappy
+  std/[atomics, base64, json, math, options, os, strformat, strutils, times],
+  openai_leap, slappy,
+  ./config
 
 type
   Recorder* = ref object
@@ -33,7 +34,7 @@ type
     transcribeJob, speakJob, quitJob
   VoiceJob = object
     kind: VoiceJobKind
-    url, model, voice: string
+    speech: SpeechSettings
     payload: string
       ## WAV bytes to transcribe, or text to speak.
     generation: int
@@ -53,8 +54,13 @@ const
   CaptureBufferSamples = CaptureRate div 2
   MaxRecordingSeconds* = 45.0
   SilenceDb = -90.0
-  SttTimeoutSeconds = 60
+  SpeechTimeoutSeconds = 60
   SttInstruction = "Perform ASR in English."
+    ## System prompt for chat-style recognition (LFM3-Audio).
+  TtsInstruction = "Read the user's message aloud exactly as written. Do not " &
+    "add, remove or change any words, and do not answer it."
+    ## Realtime models are conversational; this keeps them to reading.
+  RealtimeRate = 24000
   SpeechMarginDb = 12.0
     ## How far above the background level counts as speech.
   DcFollow = 0.001
@@ -279,37 +285,27 @@ proc wavBytes*(samples: seq[int16], rate: int): string =
   result.le32(dataBytes)
   for sample in samples: result.le16(int(cast[uint16](sample)))
 
-proc transcribe*(url, model, wav: string): string =
-  ## Send one WAV turn to an OpenAI-compatible chat-completions ASR endpoint.
-  let body = %*{
-    "model": model,
-    "messages": [
-      {"role": "system", "content": SttInstruction},
-      {"role": "user", "content": [
-        {"type": "input_audio", "input_audio": {"data": encode(wav), "format": "wav"}}]}]}
-  let curl = newCurly()
-  defer: curl.close()
-  var headers: HttpHeaders
-  headers["Content-Type"] = "application/json"
-  let response = curl.post(url, headers, $body, timeout = SttTimeoutSeconds)
-  if response.code != 200:
-    raise newException(IOError, "Speech recognition returned HTTP " & $response.code &
-      ": " & response.body[0 ..< min(200, response.body.len)])
-  parseJson(response.body)["choices"][0]["message"]["content"].getStr()
+proc speechApi(settings: SpeechSettings): OpenAiApi =
+  ## Open an openai_leap client for the speech API.
+  newOpenAiApi(settings.url, settings.apiKey, curlTimeout = SpeechTimeoutSeconds)
 
-proc synthesize*(url, model, voice, text: string): (seq[uint8], int, int) =
-  ## Speak text through an OpenAI-compatible speech endpoint, returning PCM,
-  ## sample rate and channel count.
-  let body = %*{"model": model, "input": text, "voice": voice, "response_format": "wav"}
-  let curl = newCurly()
-  defer: curl.close()
-  var headers: HttpHeaders
-  headers["Content-Type"] = "application/json"
-  let response = curl.post(url, headers, $body, timeout = SttTimeoutSeconds)
-  if response.code != 200:
-    raise newException(IOError, "Speech synthesis returned HTTP " & $response.code &
-      ": " & response.body[0 ..< min(200, response.body.len)])
-  let wav = response.body
+proc transcribe*(settings: SpeechSettings, wav: string): string =
+  ## Turn one WAV turn into text.
+  let api = speechApi(settings)
+  defer: api.close()
+  if settings.sttStyle == "chat":
+    let body = %*{
+      "model": settings.sttModel,
+      "messages": [
+        {"role": "system", "content": SttInstruction},
+        {"role": "user", "content": [
+          {"type": "input_audio", "input_audio": {"data": encode(wav), "format": "wav"}}]}]}
+    parseJson(api.post("/chat/completions", $body).body)["choices"][0]["message"]["content"].getStr()
+  else:
+    api.audioTranscriptions(settings.sttModel, wav).text
+
+proc pcmFromWav(wav: string): (seq[uint8], int, int) =
+  ## Return the 16-bit PCM, sample rate and channel count of a WAV file.
   if wav.len < 12 or wav[0 ..< 4] != "RIFF" or wav[8 ..< 12] != "WAVE":
     raise newException(IOError, "Speech synthesis did not return a WAV file")
   proc le(at, size: int): int =
@@ -336,6 +332,40 @@ proc synthesize*(url, model, voice, text: string): (seq[uint8], int, int) =
     offset = body + size + (size and 1)
   raise newException(IOError, "Synthesized WAV has no audio data")
 
+proc realtimeSpeech(api: OpenAiApi, settings: SpeechSettings, text: string): string =
+  ## Have a Realtime API model read text aloud and return its 24 kHz mono PCM.
+  let session = api.connectRealtime(settings.ttsModel)
+  defer: session.close()
+  let config = RealtimeSessionConfig(`type`: option("realtime"),
+    instructions: option(TtsInstruction), output_modalities: option(@["audio"]))
+  var output = RealtimeAudioOutputConfig(format: option(%*{"type": "audio/pcm", "rate": RealtimeRate}))
+  if settings.ttsVoice.len > 0: output.voice = option(settings.ttsVoice)
+  config.audio = option(RealtimeAudioConfig(output: option(output)))
+  session.updateSession(config)
+  session.addItem(newTextItem("user", text))
+  session.createResponse()
+  while true:
+    let event = session.nextEventWithTimeout(SpeechTimeoutSeconds * 1000)
+    if event.isNone:
+      raise newException(IOError, "Speech synthesis timed out")
+    let e = event.get
+    case e.`type`
+    of "response.output_audio.delta": result.add decode(e.delta.get)
+    of "response.done": return
+    of "error": raise newException(IOError, "Speech synthesis failed: " & e.error.get.message)
+    else: discard
+
+proc synthesize*(settings: SpeechSettings, text: string): (seq[uint8], int, int) =
+  ## Speak text, returning 16-bit PCM, sample rate and channel count.
+  let api = speechApi(settings)
+  defer: api.close()
+  if settings.ttsStyle == "speech":
+    return pcmFromWav(api.audioSpeech(settings.ttsModel, text, settings.ttsVoice))
+  let pcm = api.realtimeSpeech(settings, text)
+  var bytes = newSeq[uint8](pcm.len)
+  if pcm.len > 0: copyMem(addr bytes[0], unsafeAddr pcm[0], pcm.len)
+  (bytes, RealtimeRate, 1)
+
 proc voiceWorker() {.thread.} =
   ## Run blocking recognition and synthesis requests off the UI thread.
   while true:
@@ -346,7 +376,7 @@ proc voiceWorker() {.thread.} =
       let started = epochTime()
       var outcome = VoiceResult(generation: job.generation)
       try:
-        outcome.text = transcribe(job.url, job.model, job.payload)
+        outcome.text = transcribe(job.speech, job.payload)
       except CatchableError as error:
         outcome.error = error.msg
       outcome.seconds = epochTime() - started
@@ -358,7 +388,7 @@ proc voiceWorker() {.thread.} =
       var outcome = VoiceResult(speech: true, text: job.payload, generation: job.generation)
       try:
         (outcome.pcm, outcome.rate, outcome.channels) =
-          synthesize(job.url, job.model, job.voice, job.payload)
+          synthesize(job.speech, job.payload)
       except CatchableError as error:
         outcome.error = error.msg
       outcome.seconds = epochTime() - started
@@ -382,9 +412,9 @@ proc stopVoiceWorker*() =
   voiceResults.close()
   voiceRunning = false
 
-proc submit*(recorder: Recorder, url, model: string) =
+proc submit*(recorder: Recorder, speech: SpeechSettings) =
   ## Queue the recorded turn for recognition at 16 kHz.
-  voiceJobs.send(VoiceJob(kind: transcribeJob, url: url, model: model,
+  voiceJobs.send(VoiceJob(kind: transcribeJob, speech: speech,
     payload: wavBytes(resample(recorder.samples, recorder.rate, SttRate), SttRate)))
 
 proc speakableChunks*(markdown: string): seq[string] =
@@ -423,13 +453,13 @@ proc speakableChunks*(markdown: string): seq[string] =
     inc i
   if current.strip().len > 0: result.add current.strip()
 
-proc speak*(text, url, model, voice: string): int =
+proc speak*(text: string, speech: SpeechSettings): int =
   ## Queue a reply for synthesis, one sentence group at a time, returning the
   ## number of speech results to expect.
   let generation = speechGeneration.load()
   for chunk in speakableChunks(text):
-    voiceJobs.send(VoiceJob(kind: speakJob, url: url, model: model, voice: voice,
-      payload: chunk, generation: generation))
+    voiceJobs.send(VoiceJob(kind: speakJob, speech: speech, payload: chunk,
+      generation: generation))
     inc result
 
 proc interruptSpeech*() =

@@ -2,6 +2,17 @@ import
   std/[json, os, strutils]
 
 type
+  SpeechSettings* = object
+    ## An OpenAI-compatible speech API: OpenAI itself by default, or a local
+    ## server such as LFM3-Audio.
+    url*, apiKey*: string
+      ## API base URL; an empty key falls back to OPENAI_API_KEY.
+    sttModel*, sttStyle*: string
+      ## Recognition model; style "transcriptions" (/audio/transcriptions) or
+      ## "chat" (audio sent in a chat completion, as LFM3 expects).
+    ttsModel*, ttsStyle*, ttsVoice*: string
+      ## Speech model; style "realtime" (the Realtime API) or "speech"
+      ## (/audio/speech). An empty voice uses the model's default.
   Project* = object
     name*, cwd*: string
   Config* = object
@@ -11,10 +22,7 @@ type
       ## Working directories on the host where the agent runs.
     mode*: string
       ## Optional ACP session mode; empty keeps the agent's own default.
-    sttUrl*, sttModel*: string
-    ttsUrl*, ttsVoice*: string
-      ## Speech endpoint and voice for reading replies aloud; an empty ttsUrl
-      ## keeps replies silent.
+    speech*: SpeechSettings
     microphoneGainDb*: float
     instructions*: string
       ## Added to the agent's system prompt; empty keeps only the agent's own.
@@ -33,10 +41,6 @@ type
     microphoneGainDb*: float
 
 const
-  DefaultSttUrl = "http://localhost:8001/v1/chat/completions"
-  DefaultSttModel = "lfm3-audio-2b"
-  DefaultTtsUrl = "http://localhost:8001/v1/audio/speech"
-  DefaultTtsVoice = "female"
   DefaultInstructions = "The user is talking to you through Grimoire, a voice client on a " &
     "handheld, and your replies are read aloud. Answer in one to three short, plain " &
     "sentences unless they ask for detail. No preamble, recap, headings, lists or tables. " &
@@ -53,8 +57,10 @@ proc defaultConfig(): Config =
   let repo = getAppDir().parentDir()
   Config(agent: @[repo / "host" / "grimoire-acp"],
     projects: @[Project(name: "grimoire", cwd: repo)],
-    sttUrl: DefaultSttUrl, sttModel: DefaultSttModel,
-    ttsUrl: DefaultTtsUrl, ttsVoice: DefaultTtsVoice, pauseSeconds: 2.0,
+    speech: SpeechSettings(url: "https://api.openai.com/v1",
+      sttModel: "gpt-transcribe", sttStyle: "transcriptions",
+      ttsModel: "gpt-realtime-2.1-mini", ttsStyle: "realtime"),
+    pauseSeconds: 2.0,
     instructions: DefaultInstructions, speakReplies: true)
 
 proc loadConfig*(path = configPath()): Config =
@@ -71,10 +77,13 @@ proc loadConfig*(path = configPath()): Config =
     for item in node["projects"]:
       result.projects.add Project(name: item["name"].getStr(), cwd: item["cwd"].getStr())
   if node.hasKey("mode"): result.mode = node["mode"].getStr()
-  if node.hasKey("sttUrl"): result.sttUrl = node["sttUrl"].getStr()
-  if node.hasKey("sttModel"): result.sttModel = node["sttModel"].getStr()
-  if node.hasKey("ttsUrl"): result.ttsUrl = node["ttsUrl"].getStr()
-  if node.hasKey("ttsVoice"): result.ttsVoice = node["ttsVoice"].getStr()
+  if node.hasKey("speech"):
+    let speech = node["speech"]
+    for (key, field) in [("url", addr result.speech.url), ("apiKey", addr result.speech.apiKey),
+        ("sttModel", addr result.speech.sttModel), ("sttStyle", addr result.speech.sttStyle),
+        ("ttsModel", addr result.speech.ttsModel), ("ttsStyle", addr result.speech.ttsStyle),
+        ("voice", addr result.speech.ttsVoice)]:
+      if speech.hasKey(key): field[] = speech[key].getStr()
   if node.hasKey("instructions"): result.instructions = node["instructions"].getStr()
   if node.hasKey("sessionMeta"): result.sessionMeta = node["sessionMeta"]
   if node.hasKey("speakReplies"): result.speakReplies = node["speakReplies"].getBool()

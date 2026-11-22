@@ -99,7 +99,7 @@ proc newApp*(config: Config, gainDb: float, width, height: int, fontSize: float3
   let typeface = parseTtf(FontBytes)
   result = App(config: config, agent: Agent(instructions: config.instructions, sessionMeta: config.sessionMeta), recorder: newRecorder(gainDb), speaker: Speaker(),
     top: newImage(width, height), bottom: newImage(width, height),
-    topDirty: true, bottomDirty: true, speakReplies: config.speakReplies and config.ttsUrl.len > 0)
+    topDirty: true, bottomDirty: true, speakReplies: config.speakReplies)
   result.recorder.endSeconds = config.pauseSeconds
   result.font = newFont(typeface)
   result.font.size = fontSize
@@ -289,7 +289,7 @@ proc layoutButtons(app: App, width, height: float32) =
     app.button(closeMenu, "BACK TO GRIMOIRE", rect(Margin, y, full, itemHeight), accent = true)
     y += itemHeight + gap
     app.button(toggleSpeech, "SPOKEN REPLIES: " & (if app.speakReplies: "ON" else: "OFF"),
-      rect(Margin, y, half, itemHeight), app.config.ttsUrl.len > 0)
+      rect(Margin, y, half, itemHeight))
     app.button(nextPause, &"PAUSE TO SEND: {app.recorder.endSeconds:.1f} s",
       rect(Margin + half + gap, y, half, itemHeight))
     y += itemHeight + gap

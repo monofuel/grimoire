@@ -63,8 +63,20 @@ agent, set `GRIMOIRE_AGENT` in `local.mk` (handheld) or `agent` in the config
 
 ## Configure
 
-`~/.config/grimoire/config.json`: `projects` (folders on your computer) and
-`sttUrl` / `ttsUrl` (an OpenAI-compatible speech server).
+`~/.config/grimoire/config.json` needs `projects`: folders on your computer.
+
+Speech uses OpenAI by default: set `OPENAI_API_KEY`. It transcribes with
+`gpt-transcribe` and speaks replies with `gpt-realtime-2.1-mini`. To use a
+local OpenAI-compatible server instead, such as LFM3-Audio:
+
+```json
+{
+  "projects": [{"name": "grimoire", "cwd": "/path/on/your/computer"}],
+  "speech": {"url": "http://speech-server:8001/v1", "apiKey": "local",
+             "sttModel": "lfm3-audio-2b", "sttStyle": "chat",
+             "ttsModel": "lfm3-audio-2b", "ttsStyle": "speech", "voice": "female"}
+}
+```
 
 ## License
 
