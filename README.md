@@ -27,16 +27,39 @@ nimby sync nimby.lock
 make desktop rg-ds-plus host-setup
 ```
 
-## Run
+## Run on a desktop
+
+`make run` opens Grimoire as two windows and starts the agent on the same
+machine.
+
+## Run on the RG DS Plus
+
+This assumes your handheld runs Linux, that you can already SSH into it from
+your computer with a key, and that its user has passwordless `sudo`. Ours runs
+Gentoo with the [mono-retro](https://github.com/monofuel/mono-retro) launcher;
+the scripts stop and restart its OpenRC service. Read `device/` and `host/`
+first: they are short shell scripts.
 
 ```sh
-make run                                       # desktop
-make install-rg-ds-plus RG_DS_PLUS=<address>   # copy to the handheld
-make serve-rg-ds-plus RG_DS_PLUS=<address>     # then open Grimoire on it
+make install-rg-ds-plus RG_DS_PLUS=<address>
+make serve-rg-ds-plus RG_DS_PLUS=<address>
 ```
 
-The agent is Claude Code unless you set `GRIMOIRE_AGENT` in `local.mk`
-(handheld) or `agent` in the config (desktop).
+- `install-rg-ds-plus` copies the Grimoire binary and the `device/` scripts to
+  `/usr/local/bin` on the handheld with `sudo`, and creates
+  `~/.config/grimoire/config.json` there if it is missing.
+- `serve-rg-ds-plus` runs on your computer until you stop it. When you open
+  Grimoire on the handheld, it starts the agent on your computer and connects
+  it to Grimoire over SSH. The handheld never connects to your computer.
+- `run-rg-ds-plus` is the alternative: it starts Grimoire on the handheld from
+  your computer, pausing the launcher until you quit.
+
+## Choosing the agent
+
+Claude Code is the default: `make host-setup` installs its ACP adapter,
+`@agentclientprotocol/claude-agent-acp`, from npm into `build/`. For another
+agent, set `GRIMOIRE_AGENT` in `local.mk` (handheld) or `agent` in the config
+(desktop) to the command that starts it.
 
 ## Configure
 
