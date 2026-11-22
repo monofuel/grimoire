@@ -17,6 +17,9 @@ editors use to talk to coding agents, so any ACP agent works: Claude Code,
 Gemini CLI, Codex and more. The agent runs on your computer; the handheld is
 the screen and mic.
 
+The current project defaults have been tested on a custom Gentoo installation
+on the RG DS Plus. BananaOS has not been tested yet.
+
 ## Build
 
 On an x86-64 Linux computer, you'll need:
