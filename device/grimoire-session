@@ -1,0 +1,30 @@
+#!/bin/sh
+# Run Grimoire on the RG DS Plus displays, then always hand them back to the
+# mono-retro launcher. Arguments pass through to grimoire; stdout stays free
+# for --agent-stdio and diagnostics go to /tmp/grimoire.log.
+dir="$HOME/.config/grimoire"
+config="${GRIMOIRE_CONFIG:-$dir/config.json}"
+log=/tmp/grimoire.log
+# Only take the screens from the idle launcher, never from a running game or tool.
+if pgrep -f '/mono-retro-(player|hwtest|ra)' >/dev/null; then
+  echo "A game or tool is running on the handheld; Grimoire was not started." >&2
+  exit 75
+fi
+# A copy of the launcher's profile for the running kernel, when /etc/mono-retro
+# does not provide it.
+if [ -f "$dir/device-profile.json" ]; then
+  set -- --profile:"$dir/device-profile.json" "$@"
+fi
+restore() {
+  sudo -n rc-service mono-retro start >/dev/null 2>&1
+}
+trap restore EXIT INT TERM HUP
+sudo -n rc-service mono-retro stop >/dev/null 2>&1
+run=""
+if [ ! -w /dev/dri/card0 ] || ! ls /dev/input/event* | xargs -n1 test -r; then
+  run="sudo -n"
+fi
+$run /usr/local/bin/grimoire --config:"$config" "$@" 2>>"$log"
+status=$?
+echo "grimoire exited with $status" >>"$log"
+exit $status

@@ -1,0 +1,25 @@
+#!/bin/sh
+# Keep the agent available to Grimoire opened from the handheld's launcher.
+# This host checks over its existing pinned SSH connection whether a Grimoire
+# is asking for an agent, then starts the Claude ACP adapter here and joins
+# it to that Grimoire. The handheld holds no credentials and nothing listens
+# on the network. Usage: serve-rg-ds-plus ADDRESS   (stop with Ctrl-C)
+set -u
+address=${1:?usage: serve-rg-ds-plus DEVICE_ADDRESS}
+here=$(dirname "$(readlink -f "$0")")
+ssh_ds="ssh -T -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=5 \
+  -o ServerAliveInterval=15 ${GRIMOIRE_SSH_OPTS:-}"
+trap 'exit 0' INT TERM
+echo "Serving the Grimoire agent to $address; open Grimoire from the handheld's Apps." >&2
+while :; do
+  # Each check is a short bounded session, so no handheld-side waiter can
+  # outlive this host.
+  if $ssh_ds "${GRIMOIRE_DEVICE_USER:-$USER}@$address" \
+      'for i in $(seq 100); do sudo -n test -e /run/grimoire-agent/waiting && exit 0; sleep 0.3; done; exit 1'
+  then
+    GRIMOIRE_DEVICE_COMMAND="$ssh_ds ${GRIMOIRE_DEVICE_USER:-$USER}@$address sudo -n /usr/local/bin/grimoire-host-attach" \
+      "$here/run-on-rg-ds-plus" "$address"
+  else
+    sleep 2
+  fi
+done

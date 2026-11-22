@@ -1,0 +1,9 @@
+#!/bin/sh
+# Start the pinned Claude ACP adapter over stdio on the development host.
+# Used directly on desktop and by the handheld runners; stdout carries only
+# ACP messages.
+repo=$(dirname "$(dirname "$(readlink -f "$0")")")
+export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:/run/current-system/sw/bin:$PATH"
+export CLAUDE_AGENT_ACP_PROTOCOL=v1
+export CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false
+exec "$repo/build/host-tools/node_modules/.bin/claude-agent-acp"

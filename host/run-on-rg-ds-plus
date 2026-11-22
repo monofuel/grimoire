@@ -1,0 +1,30 @@
+#!/bin/sh
+# Start Grimoire on the RG DS Plus with the Claude ACP agent running on this host.
+# ACP travels over the existing pinned host-to-handheld SSH session, so the
+# handheld needs no credentials for the host. Usage: run-on-rg-ds-plus ADDRESS
+set -eu
+address=${1:?usage: run-on-rg-ds-plus DEVICE_ADDRESS}
+here=$(dirname "$(readlink -f "$0")")
+pipes=$(mktemp -d /tmp/grimoire-acp.XXXXXX)
+mkfifo -m 600 "$pipes/to-agent" "$pipes/from-agent"
+# The adapter keeps running after stdin closes, so it gets its own process
+# group that is stopped when the handheld session ends.
+setsid "$here/grimoire-acp" <"$pipes/to-agent" >"$pipes/from-agent" &
+agent=$!
+cleanup() {
+  kill -TERM -- "-$agent" 2>/dev/null || true
+  rm -rf "$pipes"
+}
+trap cleanup EXIT INT TERM HUP
+status=0
+if [ -n "${GRIMOIRE_DEVICE_COMMAND:-}" ]; then
+  # Another handheld-side command: host/serve-rg-ds-plus, or a local stand-in for tests.
+  sh -c "$GRIMOIRE_DEVICE_COMMAND" >"$pipes/to-agent" <"$pipes/from-agent" || status=$?
+else
+ssh -T -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=5 \
+  -o ServerAliveInterval=15 ${GRIMOIRE_SSH_OPTS:-} \
+  "${GRIMOIRE_DEVICE_USER:-$USER}@$address" /usr/local/bin/grimoire-session --agent-stdio \
+  >"$pipes/to-agent" <"$pipes/from-agent" || status=$?
+fi
+echo "Grimoire session on $address ended ($status)." >&2
+exit $status

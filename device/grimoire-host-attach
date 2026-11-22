@@ -1,0 +1,17 @@
+#!/bin/sh
+# Run on the handheld by the development host over its SSH session, once
+# grimoire-host-relay is waiting: join this session's stdio to that Grimoire's
+# agent connection. Returns when that Grimoire exits; exits 75 if none waits.
+dir=/run/grimoire-agent
+relay=$(cat "$dir/waiting" 2>/dev/null)
+rm -f "$dir/waiting"
+if [ -z "$relay" ] || ! kill -0 "$relay" 2>/dev/null; then
+  echo "No Grimoire is waiting for an agent." >&2
+  exit 75
+fi
+# Background commands read /dev/null unless stdin is given explicitly.
+cat <&0 >"$dir/from-host" &
+feeder=$!
+cat <"$dir/to-host"
+kill "$feeder" 2>/dev/null
+exit 0

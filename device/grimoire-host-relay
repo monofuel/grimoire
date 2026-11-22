@@ -1,0 +1,26 @@
+#!/bin/sh
+# ACP agent command for Grimoire started on the handheld (for example from the
+# launcher). It hands Grimoire's ACP stdio to the development host's waiting
+# grimoire-host-attach session (host/serve-rg-ds-plus), which runs the agent.
+# Exits with status 75 when no host session claims it in time.
+dir=/run/grimoire-agent
+wait_seconds=${GRIMOIRE_HOST_WAIT:-10}
+mkdir -p "$dir"
+chmod 700 "$dir"
+rm -f "$dir/to-host" "$dir/from-host" "$dir/waiting"
+mkfifo -m 600 "$dir/to-host" "$dir/from-host"
+echo $$ >"$dir/waiting"
+# The host session removes the marker when it takes the connection.
+tries=$((wait_seconds * 5))
+while [ -e "$dir/waiting" ]; do
+  tries=$((tries - 1))
+  if [ "$tries" -le 0 ]; then
+    rm -f "$dir/waiting" "$dir/to-host" "$dir/from-host"
+    echo "No development host is connected (start host/serve-rg-ds-plus)." >&2
+    exit 75
+  fi
+  sleep 0.2
+done
+# Background commands read /dev/null unless stdin is given explicitly.
+cat <&0 >"$dir/to-host" &
+exec cat <"$dir/from-host"

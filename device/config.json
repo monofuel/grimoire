@@ -1,0 +1,7 @@
+{
+  "agent": ["/usr/local/bin/grimoire-host-relay"],
+  "mode": "default",
+  "projects": [
+    {"name": "grimoire", "cwd": "/absolute/path/to/your/project/on/the/host"}
+  ]
+}
