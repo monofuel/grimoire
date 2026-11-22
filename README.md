@@ -30,14 +30,48 @@ make host-setup    # Claude Code ACP adapter
 
 ## Run
 
+Grimoire is only the screens, microphone and speaker. The agent is Claude Code
+(through `claude-agent-acp`, installed by `make host-setup`), and it always
+runs on your computer with your own login and files.
+
+**On a desktop**, `make run` opens Grimoire as two windows and starts the agent
+as a local child process.
+
+**On the RG DS Plus**, Grimoire runs on the handheld and the agent stays on your
+computer. They talk over SSH from your computer to the handheld; the handheld
+never connects back and holds no keys.
+
 ```sh
-make run                                      # desktop
 make install-rg-ds-plus RG_DS_PLUS=<address>
-make serve-rg-ds-plus RG_DS_PLUS=<address>    # then open Grimoire on the handheld
 ```
 
-Put `RG_DS_PLUS_USER`, `RG_DS_PLUS_SSH_OPTS` and `GRIMOIRE_TARGET_LIBS` in
-`local.mk`.
+copies the Grimoire binary and its helper scripts to the handheld over SSH and
+creates `~/.config/grimoire/config.json` there if it is missing. Edit its
+`projects` to name a directory on your computer. The SSH user needs
+passwordless `sudo` to install into `/usr/local/bin`.
+
+Then start it one of two ways:
+
+```sh
+make run-rg-ds-plus RG_DS_PLUS=<address>
+```
+
+starts the agent on your computer, then over SSH stops the handheld's launcher
+and runs Grimoire in its place. The agent's messages travel over that SSH
+session. Quitting Grimoire restarts the launcher.
+
+```sh
+make serve-rg-ds-plus RG_DS_PLUS=<address>
+```
+
+keeps your computer ready instead: leave it running, then open Grimoire from
+the handheld's launcher menu. Grimoire waits up to ten seconds for this
+command to notice it over SSH; your computer then starts the agent and joins it
+to Grimoire the same way.
+
+Set `RG_DS_PLUS_USER`, `RG_DS_PLUS_SSH_OPTS` (for example a pinned
+`UserKnownHostsFile`) and `GRIMOIRE_TARGET_LIBS` (the handheld's libraries for
+the cross build) in an untracked `local.mk`.
 
 ## Configure
 
