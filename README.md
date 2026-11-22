@@ -88,12 +88,11 @@ The handheld must be able to reach that speech server.
 
 ## Run on the RG DS Plus
 
-The supplied scripts target a Linux handheld with the
+The supplied scripts target the RG DS Plus running Linux with the
 [mono-retro](https://github.com/monofuel/mono-retro) launcher and its OpenRC
-service; our device runs Gentoo. The device needs a matching mono-retro
-display/input profile. Your computer must
-already have key-based SSH access to the handheld, with its host key verified,
-and the handheld user needs passwordless `sudo`.
+service; our device runs Gentoo. Your computer must already have key-based
+SSH access to the handheld, with its host key verified, and the handheld
+user needs passwordless `sudo`.
 
 Before cross-building, copy the handheld's ARM64 libraries into a directory
 on your computer: libdrm, libevdev, libudev, OpenAL and glibc, including
